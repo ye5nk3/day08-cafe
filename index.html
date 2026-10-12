@@ -53,6 +53,61 @@
   .nav:hover { background: rgba(255,255,255,.08); }
   .nav.active { background: var(--accent); color: #fff; font-weight: 700; }
 
+  /* 좌측 하단 AI 모델 선택 (패밀리 사이트 형태: 위로 펼쳐지는 목록) */
+  .model { margin-top: auto; position: relative; padding-top: 14px; border-top: 1px solid rgba(255,255,255,.14); }
+  .model-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border: 1px solid rgba(255,255,255,.22);
+    border-radius: 12px;
+    background: transparent;
+    color: var(--side-text);
+    font: inherit;
+    font-size: 15px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .model-btn:hover { background: rgba(255,255,255,.08); }
+  .model-btn .m-label { opacity: .7; white-space: nowrap; }
+  .model-btn .m-value { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
+  .model-btn .chev { font-size: 11px; transition: transform .15s; }
+  .model-btn[aria-expanded="true"] .chev { transform: rotate(180deg); }
+  .model-list {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: calc(100% - 6px);
+    margin: 0;
+    padding: 6px;
+    list-style: none;
+    background: #2a1d15;
+    border: 1px solid rgba(255,255,255,.18);
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.35);
+    z-index: 10;
+  }
+  .model-list[hidden] { display: none; }
+  .model-list button {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 10px 12px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--side-text);
+    font: inherit;
+    font-size: 15px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .model-list button:hover { background: rgba(255,255,255,.1); }
+  .model-list button[aria-selected="true"] { color: #f0b36c; font-weight: 700; }
+
   .main { flex: 1; min-width: 0; position: relative; }
   #frame { width: 100%; height: 100%; border: 0; display: none; background: var(--bg); }
   .placeholder {
@@ -132,6 +187,9 @@
 
   @media (max-width: 640px) {
     #home { padding: 16px; }
+    .model { margin: 0 0 0 auto; padding: 0; border-top: 0; flex-shrink: 0; }
+    .model-btn { width: auto; white-space: nowrap; }
+    .model-list { top: calc(100% + 6px); bottom: auto; left: auto; right: 0; width: 240px; }
     body { flex-direction: column; }
     .side { width: 100%; flex-direction: row; padding: 8px; overflow-x: auto; }
     .brand { display: none; }
@@ -147,6 +205,15 @@
     <button class="nav" data-page="menu">메뉴</button>
     <button class="nav" data-page="reviews">리뷰</button>
     <button class="nav" data-page="promo">홍보</button>
+
+    <div class="model" id="model">
+      <ul class="model-list" id="model-list" role="listbox" aria-label="AI 모델" hidden></ul>
+      <button class="model-btn" id="model-btn" type="button" aria-haspopup="listbox" aria-expanded="false">
+        <span class="m-label">AI 모델</span>
+        <span class="m-value" id="model-value">자동</span>
+        <span class="chev">▼</span>
+      </button>
+    </div>
   </nav>
 
   <main class="main">
@@ -391,6 +458,64 @@
   }
 
   $("toggle-table").addEventListener("click", () => { showTable = !showTable; renderWeek(); });
+
+  // ---- AI 모델 선택 ----
+  // 선택값은 localStorage "cafe-ai-model"에 저장한다. 리뷰·홍보 페이지가 같은 값을 읽어
+  // cafe-ai 요청의 model로 보낸다. "auto"는 모델을 지정하지 않고 서버 순서대로 시도한다.
+  const MODEL_KEY = "cafe-ai-model";
+  const MODEL_OPTIONS = [
+    { id: "auto", label: "자동 (순서대로)" },
+    { id: "nvidia/nemotron-3-ultra-550b-a55b:free", label: "Nemotron 3 Ultra" },
+    { id: "google/gemma-4-31b-it:free", label: "Gemma 4 31B" },
+    { id: "google/gemma-4-26b-a4b-it:free", label: "Gemma 4 26B" },
+  ];
+
+  function savedModel() {
+    try {
+      const v = localStorage.getItem(MODEL_KEY);
+      if (MODEL_OPTIONS.some(o => o.id === v)) return v;
+    } catch (e) {}
+    return "auto";
+  }
+
+  let currentModel = savedModel();
+  const modelBtn = $("model-btn");
+  const modelList = $("model-list");
+
+  function setModelOpen(open) {
+    modelList.hidden = !open;
+    modelBtn.setAttribute("aria-expanded", String(open));
+  }
+
+  function renderModel() {
+    $("model-value").textContent = MODEL_OPTIONS.find(o => o.id === currentModel).label;
+    modelList.textContent = "";
+    MODEL_OPTIONS.forEach(o => {
+      const li = document.createElement("li");
+      const b = document.createElement("button");
+      b.type = "button";
+      b.setAttribute("role", "option");
+      b.setAttribute("aria-selected", String(o.id === currentModel));
+      const name = document.createElement("span");
+      name.textContent = o.label;
+      const mark = document.createElement("span");
+      mark.textContent = o.id === currentModel ? "✓" : "";
+      b.append(name, mark);
+      b.addEventListener("click", () => {
+        currentModel = o.id;
+        try { localStorage.setItem(MODEL_KEY, o.id); } catch (e) {}
+        renderModel();
+        setModelOpen(false);
+      });
+      li.appendChild(b);
+      modelList.appendChild(li);
+    });
+  }
+
+  modelBtn.addEventListener("click", () => setModelOpen(modelList.hidden));
+  document.addEventListener("click", e => { if (!$("model").contains(e.target)) setModelOpen(false); });
+  document.addEventListener("keydown", e => { if (e.key === "Escape") setModelOpen(false); });
+  renderModel();
 
   document.querySelectorAll(".nav").forEach(b =>
     b.addEventListener("click", () => open(b.dataset.page)));
