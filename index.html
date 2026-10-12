@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>골목카페 대시보드</title>
+<style>
+  :root {
+    --bg: #faf6f0;
+    --panel: #ffffff;
+    --side: #3b2a20;
+    --side-text: #f3e9dc;
+    --accent: #c8803a;
+    --text: #2b2118;
+    --muted: #8a7a6b;
+    --line: #e8dfd3;
+    --font: "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    display: flex;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 18px;
+  }
+
+  .side {
+    width: 220px;
+    flex-shrink: 0;
+    background: var(--side);
+    color: var(--side-text);
+    display: flex;
+    flex-direction: column;
+    padding: 24px 14px;
+    gap: 6px;
+  }
+  .brand { font-size: 22px; font-weight: 700; padding: 0 12px 20px; }
+  .brand small { display: block; font-size: 14px; font-weight: 400; opacity: .7; margin-top: 4px; }
+  .nav {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 14px 16px;
+    border: 0;
+    border-radius: 12px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+  }
+  .nav:hover { background: rgba(255,255,255,.08); }
+  .nav.active { background: var(--accent); color: #fff; font-weight: 700; }
+
+  .main { flex: 1; min-width: 0; position: relative; }
+  #frame { width: 100%; height: 100%; border: 0; display: none; background: var(--bg); }
+  .placeholder {
+    display: none;
+    height: 100%;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 8px;
+    text-align: center;
+    color: var(--muted);
+  }
+  .placeholder h1 { margin: 0; font-size: 28px; color: var(--text); }
+  .placeholder p { margin: 0; }
+
+  @media (max-width: 640px) {
+    body { flex-direction: column; }
+    .side { width: 100%; flex-direction: row; padding: 8px; overflow-x: auto; }
+    .brand { display: none; }
+    .nav { width: auto; white-space: nowrap; padding: 12px 16px; }
+  }
+</style>
+</head>
+<body>
+  <nav class="side" aria-label="메뉴">
+    <div class="brand">골목카페<small>운영 대시보드</small></div>
+    <button class="nav" data-page="home">홈</button>
+    <button class="nav" data-page="sales">매출</button>
+    <button class="nav" data-page="menu">메뉴</button>
+    <button class="nav" data-page="reviews">리뷰</button>
+    <button class="nav" data-page="promo">홍보</button>
+  </nav>
+
+  <main class="main">
+    <iframe id="frame" title="화면"></iframe>
+    <div class="placeholder" id="placeholder">
+      <h1 id="ph-title">준비 중</h1>
+      <p id="ph-text">이 화면은 아직 만드는 중이에요.</p>
+    </div>
+  </main>
+
+<script>
+  // 메뉴 이름 → 열 파일. home은 이 파일(index.html) 안의 화면이라 파일이 없다.
+  const PAGES = {
+    home:    { label: "홈",   file: null },
+    sales:   { label: "매출", file: "sales.html" },
+    menu:    { label: "메뉴", file: "menu.html" },
+    reviews: { label: "리뷰", file: "reviews.html" },
+    promo:   { label: "홍보", file: "promo.html" },
+  };
+
+  const frame = document.getElementById("frame");
+  const placeholder = document.getElementById("placeholder");
+  const phTitle = document.getElementById("ph-title");
+  const phText = document.getElementById("ph-text");
+  let token = 0; // 빠르게 눌렀을 때 마지막 클릭만 반영
+
+  function showPlaceholder(title, text) {
+    frame.style.display = "none";
+    frame.removeAttribute("src");
+    phTitle.textContent = title;
+    phText.textContent = text;
+    placeholder.style.display = "flex";
+  }
+
+  async function open(key) {
+    if (!PAGES[key]) key = "home";
+    const my = ++token;
+    document.querySelectorAll(".nav").forEach(b =>
+      b.classList.toggle("active", b.dataset.page === key));
+    history.replaceState(null, "", "#" + key);
+
+    const { label, file } = PAGES[key];
+    if (!file) {
+      showPlaceholder("준비 중", "홈 숫자 카드와 7일 매출 그래프가 여기에 들어와요.");
+      return;
+    }
+
+    // 파일이 아직 없으면 404 화면 대신 "준비 중"을 보여준다.
+    let exists = false;
+    try {
+      const res = await fetch(file, { method: "HEAD", cache: "no-store" });
+      exists = res.ok;
+    } catch (e) {}
+    if (my !== token) return;
+
+    if (!exists) {
+      showPlaceholder("준비 중", label + " 화면은 아직 만드는 중이에요.");
+      return;
+    }
+    placeholder.style.display = "none";
+    frame.style.display = "block";
+    frame.src = file;
+  }
+
+  document.querySelectorAll(".nav").forEach(b =>
+    b.addEventListener("click", () => open(b.dataset.page)));
+
+  open(location.hash.slice(1) || "home");
+</script>
+</body>
+</html>
