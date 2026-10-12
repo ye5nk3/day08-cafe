@@ -68,7 +68,70 @@
   .placeholder h1 { margin: 0; font-size: 28px; color: var(--text); }
   .placeholder p { margin: 0; }
 
+  /* 홈 화면 */
+  #home { display: none; height: 100%; overflow: auto; padding: 28px; }
+  #home h1 { margin: 0 0 4px; font-size: 26px; }
+  .date { color: var(--muted); font-size: 15px; margin-bottom: 20px; }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  .stats { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
+  .stats .card { flex: 1; min-width: 180px; margin: 0; }
+  .stat .label { color: var(--muted); font-size: 15px; }
+  .stat .value { font-size: 32px; font-weight: 700; margin-top: 6px; }
+  .stat .sub { color: var(--muted); font-size: 14px; margin-top: 4px; min-height: 1.3em; }
+  .stat.warn .value { color: #b3412f; }
+
+  .chart-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 8px; }
+  .chart-head h2 { margin: 0; font-size: 20px; }
+  .chart-head .total { color: var(--muted); font-size: 15px; }
+  .linkbtn { background: none; border: 0; padding: 4px 0; font: inherit; font-size: 15px; color: var(--accent); cursor: pointer; text-decoration: underline; }
+
+  .chart { position: relative; }
+  .bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+    height: 220px;
+    padding-top: 28px;
+    border-bottom: 1px solid var(--line);
+  }
+  .col { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; cursor: default; }
+  .col .val { font-size: 14px; font-weight: 700; margin-bottom: 4px; white-space: nowrap; min-height: 1.2em; }
+  .col .bar { width: 100%; max-width: 48px; background: var(--accent); border-radius: 4px 4px 0 0; transition: height .25s; }
+  .col.today .bar { background: #a8651f; }
+  .col:hover .bar { filter: brightness(1.1); }
+  .days { display: flex; gap: 10px; margin-top: 8px; }
+  .days div { flex: 1; text-align: center; font-size: 14px; color: var(--muted); line-height: 1.35; }
+  .days div.today { color: var(--text); font-weight: 700; }
+  .tip {
+    position: absolute;
+    top: 0;
+    transform: translateX(-50%);
+    background: var(--side);
+    color: #fff;
+    font-size: 14px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    white-space: nowrap;
+    pointer-events: none;
+    display: none;
+    z-index: 2;
+  }
+  .empty-chart { color: var(--muted); padding: 40px 0; text-align: center; }
+
+  table.sheet { width: 100%; border-collapse: collapse; }
+  table.sheet th, table.sheet td { padding: 10px 8px; border-bottom: 1px solid var(--line); text-align: left; }
+  table.sheet th { color: var(--muted); font-weight: 400; font-size: 15px; }
+  table.sheet .num { text-align: right; }
+  .err { color: #b3412f; font-size: 15px; }
+
   @media (max-width: 640px) {
+    #home { padding: 16px; }
     body { flex-direction: column; }
     .side { width: 100%; flex-direction: row; padding: 8px; overflow-x: auto; }
     .brand { display: none; }
@@ -87,6 +150,26 @@
   </nav>
 
   <main class="main">
+    <section id="home">
+      <h1>오늘 장사</h1>
+      <div class="date" id="today-date"></div>
+
+      <div class="stats">
+        <div class="card stat"><div class="label">오늘 매출</div><div class="value" id="c-amount">-</div><div class="sub" id="c-amount-sub"></div></div>
+        <div class="card stat"><div class="label">오늘 판매 건수</div><div class="value" id="c-count">-</div><div class="sub">입력한 판매 기록 수</div></div>
+        <div class="card stat" id="c-low-card"><div class="label">재고 부족 메뉴</div><div class="value" id="c-low">-</div><div class="sub" id="c-low-sub"></div></div>
+      </div>
+
+      <div class="card">
+        <div class="chart-head">
+          <h2>최근 7일 매출</h2>
+          <span class="total" id="week-total"></span>
+        </div>
+        <div id="chart-box"></div>
+        <button class="linkbtn" id="toggle-table" type="button">표로 보기</button>
+      </div>
+      <div class="err" id="home-err"></div>
+    </section>
     <iframe id="frame" title="화면"></iframe>
     <div class="placeholder" id="placeholder">
       <h1 id="ph-title">준비 중</h1>
@@ -94,6 +177,7 @@
     </div>
   </main>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script>
   // 메뉴 이름 → 열 파일. home은 이 파일(index.html) 안의 화면이라 파일이 없다.
   const PAGES = {
@@ -110,7 +194,10 @@
   const phText = document.getElementById("ph-text");
   let token = 0; // 빠르게 눌렀을 때 마지막 클릭만 반영
 
+  const homeEl = document.getElementById("home");
+
   function showPlaceholder(title, text) {
+    homeEl.style.display = "none";
     frame.style.display = "none";
     frame.removeAttribute("src");
     phTitle.textContent = title;
@@ -127,7 +214,12 @@
 
     const { label, file } = PAGES[key];
     if (!file) {
-      showPlaceholder("준비 중", "홈 숫자 카드와 7일 매출 그래프가 여기에 들어와요.");
+      // 홈은 이 파일 안의 화면. 열 때마다 최신 숫자로 다시 그린다.
+      frame.style.display = "none";
+      frame.removeAttribute("src");
+      placeholder.style.display = "none";
+      homeEl.style.display = "block";
+      loadHome();
       return;
     }
 
@@ -144,9 +236,161 @@
       return;
     }
     placeholder.style.display = "none";
+    homeEl.style.display = "none";
     frame.style.display = "block";
     frame.src = file;
   }
+
+  // ---- 홈: 숫자 카드 + 최근 7일 매출 ----
+  const SUPABASE_URL = "https://vbnemtsxmtmzwrcwctpp.supabase.co";
+  const SUPABASE_KEY = "sb_publishable_gpef23Q8zD0zHQUMmzIE9Q_WVLr2Zss"; // 공개 키만 사용
+  const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  const LOW_STOCK = 5; // menu.html과 같은 기준
+  const DAYS = 7;
+  const WEEKDAY = ["일", "월", "화", "수", "목", "금", "토"];
+  const $ = id => document.getElementById(id);
+  const won = n => n.toLocaleString("ko-KR") + "원";
+  const pad = n => String(n).padStart(2, "0");
+  const dayKey = d => d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+
+  let week = [];       // [{label, weekday, amount, count, today}]
+  let showTable = false;
+  let homeToken = 0;
+
+  async function loadHome() {
+    const my = ++homeToken;
+    const now = new Date();
+    $("today-date").textContent =
+      now.getFullYear() + "년 " + (now.getMonth() + 1) + "월 " + now.getDate() + "일 (" + WEEKDAY[now.getDay()] + ")";
+
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (DAYS - 1));
+    const [sales, menus] = await Promise.all([
+      db.from("sales").select("amount, sold_at").gte("sold_at", start.toISOString()),
+      db.from("menus").select("name, stock"),
+    ]);
+    if (my !== homeToken) return;
+
+    if (sales.error || menus.error) {
+      $("home-err").textContent = "숫자를 불러오지 못했어요: " + (sales.error || menus.error).message;
+      return;
+    }
+    $("home-err").textContent = "";
+
+    // 날짜별 합계 (판매가 없는 날도 0으로 채운다)
+    const map = new Map();
+    for (let i = 0; i < DAYS; i++) {
+      const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+      map.set(dayKey(d), {
+        label: (d.getMonth() + 1) + "/" + d.getDate(),
+        weekday: WEEKDAY[d.getDay()],
+        amount: 0, count: 0, today: i === DAYS - 1,
+      });
+    }
+    for (const r of sales.data) {
+      const day = map.get(dayKey(new Date(r.sold_at)));
+      if (day) { day.amount += r.amount; day.count += 1; }
+    }
+    week = [...map.values()];
+
+    const today = week[DAYS - 1];
+    const yesterday = week[DAYS - 2];
+    $("c-amount").textContent = won(today.amount);
+    const diff = today.amount - yesterday.amount;
+    $("c-amount-sub").textContent = yesterday.amount === 0 && today.amount === 0
+      ? "어제 매출 없음"
+      : "어제보다 " + (diff >= 0 ? "+" : "−") + won(Math.abs(diff));
+    $("c-count").textContent = today.count + "건";
+
+    const low = menus.data.filter(m => m.stock <= LOW_STOCK);
+    $("c-low").textContent = low.length + "개";
+    $("c-low-card").classList.toggle("warn", low.length > 0);
+    $("c-low-sub").textContent = menus.data.length === 0
+      ? "메뉴를 먼저 등록해 주세요"
+      : low.length === 0 ? "재고는 넉넉해요"
+      : low.slice(0, 3).map(m => m.name).join(", ") + (low.length > 3 ? " 외 " + (low.length - 3) + "개" : "");
+
+    $("week-total").textContent = "7일 합계 " + won(week.reduce((s, d) => s + d.amount, 0));
+    renderWeek();
+  }
+
+  function renderWeek() {
+    const box = $("chart-box");
+    box.textContent = "";
+    $("toggle-table").textContent = showTable ? "그래프로 보기" : "표로 보기";
+
+    const max = Math.max(...week.map(d => d.amount));
+    if (max === 0) {
+      const p = document.createElement("div");
+      p.className = "empty-chart";
+      p.textContent = "최근 7일 동안 입력한 판매가 없어요.";
+      box.appendChild(p);
+      return;
+    }
+
+    if (showTable) {
+      const t = document.createElement("table");
+      t.className = "sheet";
+      t.innerHTML = "<thead><tr><th>날짜</th><th class='num'>판매 건수</th><th class='num'>매출</th></tr></thead>";
+      const b = document.createElement("tbody");
+      for (const d of week) {
+        const tr = document.createElement("tr");
+        [d.label + " (" + d.weekday + ")" + (d.today ? " 오늘" : ""), d.count + "건", won(d.amount)].forEach((txt, i) => {
+          const td = document.createElement("td");
+          td.textContent = txt;
+          if (i > 0) td.className = "num";
+          tr.appendChild(td);
+        });
+        b.appendChild(tr);
+      }
+      t.appendChild(b);
+      box.appendChild(t);
+      return;
+    }
+
+    const chart = document.createElement("div");
+    chart.className = "chart";
+    const tip = document.createElement("div");
+    tip.className = "tip";
+    chart.appendChild(tip);
+
+    const bars = document.createElement("div");
+    bars.className = "bars";
+    const days = document.createElement("div");
+    days.className = "days";
+
+    week.forEach(d => {
+      const col = document.createElement("div");
+      col.className = "col" + (d.today ? " today" : "");
+      // 숫자는 오늘과 가장 많이 번 날에만 직접 표시한다.
+      const val = document.createElement("div");
+      val.className = "val";
+      val.textContent = (d.today || d.amount === max) && d.amount > 0 ? won(d.amount) : "";
+      const bar = document.createElement("div");
+      bar.className = "bar";
+      bar.style.height = "calc((100% - 28px) * " + (d.amount / max) + ")";
+      col.append(val, bar);
+      col.addEventListener("mouseenter", () => {
+        tip.textContent = d.label + " (" + d.weekday + ") · " + won(d.amount) + " · " + d.count + "건";
+        tip.style.display = "block";
+        const c = col.getBoundingClientRect(), p = chart.getBoundingClientRect();
+        tip.style.left = Math.min(Math.max(c.left - p.left + c.width / 2, 90), p.width - 90) + "px";
+      });
+      col.addEventListener("mouseleave", () => { tip.style.display = "none"; });
+      bars.appendChild(col);
+
+      const lab = document.createElement("div");
+      lab.className = d.today ? "today" : "";
+      lab.innerHTML = "";
+      lab.append(d.label, document.createElement("br"), d.today ? "오늘" : d.weekday);
+      days.appendChild(lab);
+    });
+
+    chart.append(bars, days);
+    box.appendChild(chart);
+  }
+
+  $("toggle-table").addEventListener("click", () => { showTable = !showTable; renderWeek(); });
 
   document.querySelectorAll(".nav").forEach(b =>
     b.addEventListener("click", () => open(b.dataset.page)));
