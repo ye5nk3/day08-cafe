@@ -91,10 +91,11 @@
     <h2>판매 입력</h2>
     <form id="form">
       <label class="f-name">메뉴 이름
-        <input id="name" required maxlength="40" placeholder="예) 아메리카노" autocomplete="off">
+        <input id="name" list="menu-list" required maxlength="40" placeholder="메뉴를 고르거나 직접 입력" autocomplete="off">
+        <datalist id="menu-list"></datalist>
       </label>
       <label class="f-num">단가(원)
-        <input id="price" type="number" inputmode="numeric" min="0" step="100" required placeholder="4500">
+        <input id="price" type="number" inputmode="numeric" min="0" step="10" required placeholder="4500">
       </label>
       <label class="f-num">수량
         <input id="qty" type="number" inputmode="numeric" min="1" step="1" value="1" required>
@@ -132,6 +133,25 @@
   }
   $("price").addEventListener("input", updateSum);
   $("qty").addEventListener("input", updateSum);
+
+  // 메뉴·재고 화면에 등록한 메뉴를 고를 수 있게 한다. 고르면 단가가 자동으로 채워진다.
+  let menus = [];
+  async function loadMenus() {
+    const { data, error } = await db.from("menus").select("name, price").order("id");
+    if (error) return; // 메뉴를 못 불러와도 직접 입력은 가능
+    menus = data;
+    const dl = $("menu-list");
+    dl.textContent = "";
+    menus.forEach(m => {
+      const o = document.createElement("option");
+      o.value = m.name;
+      dl.appendChild(o);
+    });
+  }
+  $("name").addEventListener("input", () => {
+    const m = menus.find(x => x.name === $("name").value.trim());
+    if (m) { $("price").value = m.price; updateSum(); }
+  });
 
   function fmtTime(iso) {
     const d = new Date(iso);
@@ -226,6 +246,7 @@
     load();
   });
 
+  loadMenus();
   load();
 </script>
 </body>
