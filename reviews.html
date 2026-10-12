@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>리뷰·AI 답글</title>
+<style>
+  :root {
+    --bg: #faf6f0;
+    --panel: #ffffff;
+    --side: #3b2a20;
+    --side-text: #f3e9dc;
+    --accent: #c8803a;
+    --text: #2b2118;
+    --muted: #8a7a6b;
+    --line: #e8dfd3;
+    --danger: #b3412f;
+    --ok: #3f7d4e;
+    --font: "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 28px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 18px;
+  }
+  h1 { margin: 0 0 6px; font-size: 26px; }
+  h2 { margin: 0 0 14px; font-size: 20px; }
+  .sub { color: var(--muted); font-size: 15px; margin-bottom: 20px; }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+
+  form { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+  label { display: flex; flex-direction: column; gap: 6px; font-size: 15px; color: var(--muted); }
+  input, select, textarea {
+    font: inherit;
+    color: var(--text);
+    padding: 12px 14px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: #fff;
+    min-width: 0;
+  }
+  textarea { width: 100%; resize: vertical; min-height: 96px; line-height: 1.6; }
+  input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); border-color: transparent; }
+  .f-name { flex: 1; min-width: 140px; }
+  .f-rate { min-width: 110px; }
+  .f-wide { flex: 1 0 100%; }
+  button {
+    font: inherit;
+    border: 0;
+    border-radius: 12px;
+    padding: 12px 20px;
+    background: var(--accent);
+    color: #fff;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  button:disabled { opacity: .5; cursor: default; }
+  button.light { background: var(--bg); color: var(--text); border: 1px solid var(--line); font-weight: 400; }
+  button.ghost { background: transparent; color: var(--danger); padding: 6px 10px; font-weight: 400; font-size: 15px; }
+
+  /* 확인 창: 브라우저 기본 confirm()은 일부 환경에서 막혀서 직접 그린다 */
+  .dlg-back { position: fixed; inset: 0; background: rgba(43,33,24,.45); display: flex; align-items: center; justify-content: center; z-index: 100; }
+  .dlg { background: #fff; border-radius: 16px; padding: 22px; max-width: 380px; width: calc(100% - 32px); box-shadow: 0 12px 40px rgba(0,0,0,.25); }
+  .dlg p { margin: 0 0 18px; line-height: 1.5; }
+  .dlg .row { display: flex; gap: 8px; justify-content: flex-end; }
+  .dlg .row .no { background: var(--bg); color: var(--text); border: 1px solid var(--line); font-weight: 400; }
+  .dlg .row .yes.danger { background: var(--danger); }
+
+  .msg { margin-top: 12px; min-height: 1.4em; font-size: 15px; color: var(--muted); }
+  .msg.err { color: var(--danger); }
+
+  .review-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+  .author { font-weight: 700; }
+  .stars { color: var(--accent); letter-spacing: 1px; }
+  .when { color: var(--muted); font-size: 14px; }
+  .badge { font-size: 13px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+  .badge.done { color: var(--ok); border-color: var(--ok); }
+  .badge.todo { color: var(--danger); border-color: var(--danger); }
+  .spacer { flex: 1; }
+  .content { white-space: pre-wrap; line-height: 1.6; margin-bottom: 14px; }
+
+  .reply { border-top: 1px solid var(--line); padding-top: 14px; }
+  .reply-label { font-size: 15px; color: var(--muted); margin-bottom: 8px; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; align-items: center; }
+  .status { font-size: 14px; color: var(--muted); }
+  .status.err { color: var(--danger); }
+  .empty { color: var(--muted); padding: 16px 0; }
+</style>
+</head>
+<body>
+  <h1>리뷰·AI 답글</h1>
+  <div class="sub" id="summary"></div>
+
+  <section class="card">
+    <h2>리뷰 추가</h2>
+    <form id="form">
+      <label class="f-name">작성자
+        <input id="author" required maxlength="40" placeholder="예) 민지" autocomplete="off">
+      </label>
+      <label class="f-rate">별점
+        <select id="rating">
+          <option value="5">★★★★★ 5점</option>
+          <option value="4">★★★★☆ 4점</option>
+          <option value="3">★★★☆☆ 3점</option>
+          <option value="2">★★☆☆☆ 2점</option>
+          <option value="1">★☆☆☆☆ 1점</option>
+        </select>
+      </label>
+      <label class="f-wide">리뷰 내용
+        <textarea id="content" required maxlength="1000" placeholder="손님이 남긴 리뷰를 붙여 넣어 주세요."></textarea>
+      </label>
+      <button id="add" type="submit">리뷰 저장</button>
+    </form>
+    <div class="msg" id="msg"></div>
+  </section>
+
+  <div id="list"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script>
+  // 공개 키만 사용한다. 비밀 키(AI 키)는 Edge Function의 Secrets에만 있다.
+  const SUPABASE_URL = "https://vbnemtsxmtmzwrcwctpp.supabase.co";
+  const SUPABASE_KEY = "sb_publishable_gpef23Q8zD0zHQUMmzIE9Q_WVLr2Zss";
+  // Edge Function은 JWT 검증을 켜 두어서 anon(JWT) 키로 호출한다.
+  const FUNCTION_URL = SUPABASE_URL + "/functions/v1/cafe-ai";
+  const ANON_JWT = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZibmVtdHN4bXRtendyY3djdHBwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE3OTU1MjEsImV4cCI6MjEwNzM3MTUyMX0.4MjCj4HGv9fnGgQ1dax7xqm_7h6VeEFs9fCtDCbG5Jw";
+  const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  const $ = id => document.getElementById(id);
+
+  // 확인 창. 확인하면 true, 취소·바깥 클릭·Esc면 false.
+  function ask(message, okLabel) {
+    return new Promise(resolve => {
+      const back = document.createElement("div");
+      back.className = "dlg-back";
+      const box = document.createElement("div");
+      box.className = "dlg";
+      box.setAttribute("role", "alertdialog");
+      const p = document.createElement("p");
+      p.textContent = message;
+      const row = document.createElement("div");
+      row.className = "row";
+      const no = document.createElement("button");
+      no.className = "no";
+      no.textContent = "취소";
+      const yes = document.createElement("button");
+      yes.className = "yes danger";
+      yes.textContent = okLabel || "삭제";
+      row.append(no, yes);
+      box.append(p, row);
+      back.appendChild(box);
+
+      function done(v) {
+        document.removeEventListener("keydown", onKey);
+        back.remove();
+        resolve(v);
+      }
+      function onKey(e) { if (e.key === "Escape") done(false); }
+      no.addEventListener("click", () => done(false));
+      yes.addEventListener("click", () => done(true));
+      back.addEventListener("click", e => { if (e.target === back) done(false); });
+      document.addEventListener("keydown", onKey);
+      document.body.appendChild(back);
+      no.focus();
+    });
+  }
+
+
+  function say(text, isErr) {
+    $("msg").textContent = text;
+    $("msg").className = "msg" + (isErr ? " err" : "");
+  }
+
+  // index.html 사이드바에서 고른 모델. "auto"거나 읽을 수 없으면 지정하지 않는다.
+  function pickedModel() {
+    try {
+      const v = localStorage.getItem("cafe-ai-model");
+      return v && v !== "auto" ? v : undefined;
+    } catch (e) { return undefined; }
+  }
+
+  function fmtDate(iso) {
+    const d = new Date(iso);
+    return d.getFullYear() + "." + (d.getMonth() + 1) + "." + d.getDate();
+  }
+
+  async function generate(review) {
+    const res = await fetch(FUNCTION_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + ANON_JWT,
+        "apikey": ANON_JWT,
+      },
+      body: JSON.stringify({
+        type: "review_reply",
+        model: pickedModel(),
+        review: { author: review.author, rating: review.rating, content: review.content },
+      }),
+    });
+    let data = {};
+    try { data = await res.json(); } catch (e) {}
+    if (!res.ok) throw new Error(data.error || "AI 요청에 실패했어요. (" + res.status + ")");
+    return data; // { text, options, model }
+  }
+
+  function card(r) {
+    const el = document.createElement("section");
+    el.className = "card";
+
+    const head = document.createElement("div");
+    head.className = "review-head";
+    const author = document.createElement("span");
+    author.className = "author";
+    author.textContent = r.author;
+    const stars = document.createElement("span");
+    stars.className = "stars";
+    stars.textContent = "★".repeat(r.rating) + "☆".repeat(5 - r.rating);
+    stars.title = "별점 " + r.rating + "점";
+    const when = document.createElement("span");
+    when.className = "when";
+    when.textContent = fmtDate(r.created_at);
+    const badge = document.createElement("span");
+    const replied = !!(r.reply && r.reply.trim());
+    badge.className = "badge " + (replied ? "done" : "todo");
+    badge.textContent = replied ? "답글 완료" : "답글 전";
+    const spacer = document.createElement("span");
+    spacer.className = "spacer";
+    const del = document.createElement("button");
+    del.className = "ghost";
+    del.textContent = "삭제";
+    head.append(author, stars, when, badge, spacer, del);
+
+    const content = document.createElement("div");
+    content.className = "content";
+    content.textContent = r.content;
+
+    const reply = document.createElement("div");
+    reply.className = "reply";
+    const label = document.createElement("div");
+    label.className = "reply-label";
+    label.textContent = "사장님 답글";
+    const ta = document.createElement("textarea");
+    ta.value = r.reply || "";
+    ta.placeholder = "AI 답글 만들기를 누르면 초안이 여기에 들어와요. 직접 써도 돼요.";
+    ta.maxLength = 1000;
+
+    const actions = document.createElement("div");
+    actions.className = "actions";
+    const gen = document.createElement("button");
+    gen.textContent = replied ? "AI로 다시 만들기" : "AI 답글 만들기";
+    const save = document.createElement("button");
+    save.className = "light";
+    save.textContent = "저장";
+    const copy = document.createElement("button");
+    copy.className = "light";
+    copy.textContent = "복사";
+    const status = document.createElement("span");
+    status.className = "status";
+    actions.append(gen, save, copy, status);
+
+    function note(text, isErr) {
+      status.textContent = text;
+      status.className = "status" + (isErr ? " err" : "");
+    }
+
+    gen.addEventListener("click", async () => {
+      if (ta.value.trim() && !(await ask("지금 쓴 답글을 AI 초안으로 바꿀까요?", "바꾸기"))) return;
+      gen.disabled = save.disabled = true;
+      note("답글을 만드는 중이에요… (10초 안팎)");
+      try {
+        const out = await generate(r);
+        ta.value = out.text;
+        const short = (out.model || "").split("/").pop().replace(":free", "");
+        note("초안을 만들었어요" + (short ? " (" + short + ")" : "") + ". 고쳐서 저장해 주세요.");
+      } catch (e) {
+        note(e.message, true);
+      }
+      gen.disabled = save.disabled = false;
+    });
+
+    save.addEventListener("click", async () => {
+      const text = ta.value.trim();
+      save.disabled = true;
+      const { error } = await db.from("reviews")
+        .update({ reply: text || null, replied_at: text ? new Date().toISOString() : null })
+        .eq("id", r.id);
+      save.disabled = false;
+      if (error) { note("저장하지 못했어요: " + error.message, true); return; }
+      load(); // 배지와 상단 요약을 새로 그린다
+    });
+
+    copy.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(ta.value);
+        note("복사했어요.");
+      } catch (e) {
+        ta.select();
+        note("선택했어요. Ctrl/⌘+C로 복사해 주세요.");
+      }
+    });
+
+    del.addEventListener("click", async () => {
+      if (!(await ask(r.author + "님의 리뷰를 삭제할까요?"))) return;
+      const { error } = await db.from("reviews").delete().eq("id", r.id);
+      if (error) { say("삭제하지 못했어요: " + error.message, true); return; }
+      load();
+    });
+
+    reply.append(label, ta, actions);
+    el.append(head, content, reply);
+    return el;
+  }
+
+  async function load() {
+    const { data, error } = await db.from("reviews").select("*").order("created_at", { ascending: false });
+    const box = $("list");
+    box.textContent = "";
+    if (error) { say("불러오지 못했어요: " + error.message, true); return; }
+
+    const todo = data.filter(r => !(r.reply && r.reply.trim())).length;
+    $("summary").textContent = data.length === 0
+      ? "아직 등록한 리뷰가 없어요."
+      : "리뷰 " + data.length + "개 · 답글 전 " + todo + "개";
+
+    if (data.length === 0) {
+      const p = document.createElement("div");
+      p.className = "empty";
+      p.textContent = "위에서 리뷰를 추가하면 여기에 나타나요.";
+      box.appendChild(p);
+      return;
+    }
+    data.forEach(r => box.appendChild(card(r)));
+  }
+
+  $("form").addEventListener("submit", async e => {
+    e.preventDefault();
+    const author = $("author").value.trim();
+    const content = $("content").value.trim();
+    const rating = Number($("rating").value);
+    if (!author || !content) { say("작성자와 리뷰 내용을 입력해 주세요.", true); return; }
+
+    $("add").disabled = true;
+    const { error } = await db.from("reviews").insert({ author, rating, content });
+    $("add").disabled = false;
+    if (error) { say("저장하지 못했어요: " + error.message, true); return; }
+
+    say("리뷰를 저장했어요.");
+    $("author").value = "";
+    $("content").value = "";
+    $("rating").value = "5";
+    load();
+  });
+
+  load();
+</script>
+</body>
+</html>

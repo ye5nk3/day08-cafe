@@ -73,6 +73,14 @@
     line-height: 1;
   }
 
+  /* 확인 창: 브라우저 기본 confirm()은 일부 환경에서 막혀서 직접 그린다 */
+  .dlg-back { position: fixed; inset: 0; background: rgba(43,33,24,.45); display: flex; align-items: center; justify-content: center; z-index: 100; }
+  .dlg { background: #fff; border-radius: 16px; padding: 22px; max-width: 380px; width: calc(100% - 32px); box-shadow: 0 12px 40px rgba(0,0,0,.25); }
+  .dlg p { margin: 0 0 18px; line-height: 1.5; }
+  .dlg .row { display: flex; gap: 8px; justify-content: flex-end; }
+  .dlg .row .no { background: var(--bg); color: var(--text); border: 1px solid var(--line); font-weight: 400; }
+  .dlg .row .yes.danger { background: var(--danger); }
+
   .msg { margin-top: 12px; min-height: 1.4em; font-size: 15px; color: var(--muted); }
   .msg.err { color: var(--danger); }
 
@@ -122,6 +130,44 @@
   const LOW_STOCK = 5; // 이 수량 이하면 "부족"으로 표시 (홈 카드에서도 같은 기준을 쓴다)
 
   const $ = id => document.getElementById(id);
+
+  // 확인 창. 확인하면 true, 취소·바깥 클릭·Esc면 false.
+  function ask(message, okLabel) {
+    return new Promise(resolve => {
+      const back = document.createElement("div");
+      back.className = "dlg-back";
+      const box = document.createElement("div");
+      box.className = "dlg";
+      box.setAttribute("role", "alertdialog");
+      const p = document.createElement("p");
+      p.textContent = message;
+      const row = document.createElement("div");
+      row.className = "row";
+      const no = document.createElement("button");
+      no.className = "no";
+      no.textContent = "취소";
+      const yes = document.createElement("button");
+      yes.className = "yes danger";
+      yes.textContent = okLabel || "삭제";
+      row.append(no, yes);
+      box.append(p, row);
+      back.appendChild(box);
+
+      function done(v) {
+        document.removeEventListener("keydown", onKey);
+        back.remove();
+        resolve(v);
+      }
+      function onKey(e) { if (e.key === "Escape") done(false); }
+      no.addEventListener("click", () => done(false));
+      yes.addEventListener("click", () => done(true));
+      back.addEventListener("click", e => { if (e.target === back) done(false); });
+      document.addEventListener("keydown", onKey);
+      document.body.appendChild(back);
+      no.focus();
+    });
+  }
+
   const won = n => n.toLocaleString("ko-KR") + "원";
 
   function say(text, isErr) {
@@ -141,7 +187,7 @@
   }
 
   async function remove(m) {
-    if (!confirm("'" + m.name + "' 메뉴를 삭제할까요?")) return;
+    if (!(await ask("'" + m.name + "' 메뉴를 삭제할까요?"))) return;
     const { error } = await db.from("menus").delete().eq("id", m.id);
     if (error) { say("삭제하지 못했어요: " + error.message, true); return; }
     say("삭제했어요.");
