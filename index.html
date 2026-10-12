@@ -14,6 +14,7 @@
     --text: #2b2118;
     --muted: #8a7a6b;
     --line: #e8dfd3;
+    --danger: #b3412f;
     --font: "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
   }
   * { box-sizing: border-box; }
@@ -139,7 +140,7 @@
   .stat .label { color: var(--muted); font-size: 15px; }
   .stat .value { font-size: 32px; font-weight: 700; margin-top: 6px; }
   .stat .sub { color: var(--muted); font-size: 14px; margin-top: 4px; min-height: 1.3em; }
-  .stat.warn .value { color: #b3412f; }
+  .stat.warn .value { color: var(--danger); }
 
   .chart-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 8px; }
   .chart-head h2 { margin: 0; font-size: 20px; }
@@ -183,7 +184,7 @@
   table.sheet th, table.sheet td { padding: 10px 8px; border-bottom: 1px solid var(--line); text-align: left; }
   table.sheet th { color: var(--muted); font-weight: 400; font-size: 15px; }
   table.sheet .num { text-align: right; }
-  .err { color: #b3412f; font-size: 15px; }
+  .err { color: var(--danger); font-size: 15px; }
 
   @media (max-width: 640px) {
     #home { padding: 16px; }
